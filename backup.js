@@ -7,7 +7,7 @@ let networking
 
 
 /******ONLY CHANGE STUFF IN THE CONFIG AREA******/
-let version = "3.0.0"
+let version = "3.1.0"
 let configStartDefinition = "/10*config10*/"
 let configEndDefinition = "/10*config end10*/"
 /******EVERYTHING BELOW CAN BE CHANGED IN THE CONFIG AREA******/
@@ -16,9 +16,15 @@ let configEndDefinition = "/10*config end10*/"
 
 /** @type {Job[]} */
 let jobs = []
+/**
+ * these will run after all jobs are done
+ * @type {PostProcess[]} 
+ */
+let postPorcessing = []
 let alwaysArgs = ""
 let autoUpdate = true
 let updateURL = "http://localhost:25515"
+let ignoreUpdateIfServerIsDown = true
 
 let updateOn = {
     patch: true,
@@ -36,11 +42,18 @@ function setConfig() {
     alwaysArgs = "/J /ETA /COMPRESS /MIR /R:3 /W:5"
 
 
+    postPorcessing.push(new PostProcess(() => {
+        console.log("post processing script that is triggered after all jobs are done, is running...")
+    }))
+
     jobs.push(new Job(
-        "scr",
+        "src",
         "dest",
         ["ignoreDir1", "ignoreDir2"],
-        ["ignoreFile1", "ignoreFile2"]
+        ["ignoreFile1", "ignoreFile2"],
+        new PostProcess(() => {
+            console.log("post processing script that is triggered after this job is done, is running...")
+        })
     ))
 
     /**********config end**********/
@@ -56,19 +69,29 @@ function setConfig() {
         }
     }
 }
+class PostProcess {
+    constructor(script) {
+        this.script = script
+    }
 
+    async run() {
+        await this.script()
+    }
+}
 class Job {
     /**
      * @param {string} scr
      * @param {string} [dst]
      * @param {string[]} [xcludeDirs]
      * @param {string[]} [xcludeFiles]
+     * @param {PostProcess} [postPorcess]
      */
-    constructor(scr, dst = "", xcludeDirs = [], xcludeFiles = []) {
+    constructor(scr, dst = "", xcludeDirs = [], xcludeFiles = [], postPorcess) {
         this.scr = scr
         this.dst = dst
         this.xcludeDirs = xcludeDirs
         this.xcludeFiles = xcludeFiles
+        this.postPorcess = postPorcess
     }
 }
 
@@ -196,10 +219,19 @@ async function update() {
 
     let config = script.substring(configStart, configEnd + configEndDefinition.length)
 
+    function errorHandler(err) {
+        if (ignoreUpdateIfServerIsDown) {
+            console.log("ignoring update because server is down")
+            return 1
+        }
+        console.error("could not update. the connection to the server failed")
+        throw err
+    }
     // first compare versions
     return new Promise((resolveV, rejectV) => {
 
         networking.get(updateURL + "/version", (res) => {
+
             let data = ""
             res.on("data", (chunk) => {
                 data += chunk
@@ -243,6 +275,9 @@ async function update() {
                 let newScriptData = ""
                 let contentLength
                 let request = networking.get(updateURL + "/update", (response) => {
+                    response.on('error', (err) => {
+                        resolveV(errorHandler(err))
+                    })
                     response.once('data', (chunk) => {
 
                         // get the size of the incomming file
@@ -286,7 +321,11 @@ async function update() {
 
 
 
+            }).on('error', (err) => {
+                resolveV(errorHandler(err))
             })
+        }).on('error', (err) => {
+            resolveV(errorHandler(err))
         })
     })
 
@@ -321,8 +360,20 @@ async function update() {
         args = args.concat(job.xcludeFiles)
         try {
             await execute("robocopy", args)
+            if (job.postPorcess && job.postPorcess instanceof PostProcess) {
+                await job.postPorcess.run()
+            }
         } catch (error) {
             console.log(error)
+
+            if (job.postPorcess && job.postPorcess instanceof PostProcess) {
+                console.log("skipped post processing script because job failed")
+            }
+
         }
+    }
+    console.log("all jobs done. running post processing scripts...")
+    for (let script of postPorcessing) {
+        await script.run()
     }
 })()
