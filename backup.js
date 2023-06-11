@@ -55,7 +55,7 @@ function setConfig() {
         "dest",
         ["ignoreDir1", "ignoreDir2"],
         ["ignoreFile1", "ignoreFile2"],
-        new PostProcess(() => {
+        new PostProcess((job) => {
             console.log("post processing script that is triggered after this job is done, is running...")
         })
     ))
@@ -371,7 +371,7 @@ async function update() {
         try {
             await execute("robocopy", args)
             if (job.postPorcess && job.postPorcess instanceof PostProcess) {
-                await job.postPorcess.run()
+                await job.postPorcess.run(job)
             }
         } catch (error) {
             console.log(error)
