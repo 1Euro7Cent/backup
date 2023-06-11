@@ -4,7 +4,11 @@ const fs = require("fs")
 /**@type {import("https") | import("http")} */
 let networking
 
-
+/*
+---changelog---
+3.1.0:
+- added post processing scripts
+*/
 
 /******ONLY CHANGE STUFF IN THE CONFIG AREA******/
 let version = "3.1.0"
@@ -23,7 +27,7 @@ let jobs = []
 let postPorcessing = []
 let alwaysArgs = ""
 let autoUpdate = true
-let updateURL = "http://localhost:25515"
+let updateURL = "http://wings.mrserver.ddnss.de:25515"
 let ignoreUpdateIfServerIsDown = true
 
 let updateOn = {
@@ -70,12 +74,18 @@ function setConfig() {
     }
 }
 class PostProcess {
+    /**
+     * @param {{ (job:Job | undefined): void;}} script
+     */
     constructor(script) {
         this.script = script
     }
 
-    async run() {
-        await this.script()
+    /**
+     * @param {Job | undefined} [job]
+     */
+    async run(job) {
+        await this.script(job)
     }
 }
 class Job {
