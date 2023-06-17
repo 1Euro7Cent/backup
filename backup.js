@@ -11,7 +11,7 @@ let networking
 */
 
 /******ONLY CHANGE STUFF IN THE CONFIG AREA******/
-let version = "3.1.0"
+let version = "3.1.1"
 let configStartDefinition = "/10*config10*/"
 let configEndDefinition = "/10*config end10*/"
 /******EVERYTHING BELOW CAN BE CHANGED IN THE CONFIG AREA******/
@@ -371,7 +371,12 @@ async function update() {
         try {
             await execute("robocopy", args)
             if (job.postPorcess && job.postPorcess instanceof PostProcess) {
-                await job.postPorcess.run(job)
+                try {
+                    await job.postPorcess.run(job)
+                }
+                catch (error) {
+                    console.log("post processing script failed with error:", error)
+                }
             }
         } catch (error) {
             console.log(error)
